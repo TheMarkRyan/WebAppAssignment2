@@ -1,55 +1,163 @@
-import movieModel from './movieModel';
-import asyncHandler from 'express-async-handler';
 import express from 'express';
-import {
-    getUpcomingMovies
-  } from '../tmdb-api';
-  import { getGenres } from '../tmdb-api';
+import asyncHandler from 'express-async-handler';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import multer from 'multer';
+import User from '../users/userModel.js';
+import authenticate from '../../authenticate';
 
 
 const router = express.Router();
 
+// Configure Multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/'); // Path to store uploaded files
+  },
+  filename: function (req, file, cb) {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+
+const upload = multer({ storage });
+
+// Get all users
 router.get('/', asyncHandler(async (req, res) => {
-    let { page = 1, limit = 10 } = req.query; // destructure page and limit and set default values
-    [page, limit] = [+page, +limit]; //trick to convert to numeric (req.query will contain string values)
-
-    // Parallel execution of counting movies and getting movies using movieModel
-    const [total_results, results] = await Promise.all([
-        movieModel.estimatedDocumentCount(),
-        movieModel.find().limit(limit).skip((page - 1) * limit)
-    ]);
-    const total_pages = Math.ceil(total_results / limit); //Calculate total number of pages (= total No Docs/Number of docs per page) 
-
-    //construct return Object and insert into response object
-    const returnObject = {
-        page,
-        total_pages,
-        total_results,
-        results
-    };
-    res.status(200).json(returnObject);
+  const users = await User.find();
+  res.status(200).json(users);
 }));
 
-// Get movie details
-router.get('/:id', asyncHandler(async (req, res) => {
-    const id = parseInt(req.params.id);
-    const movie = await movieModel.findByMovieDBId(id);
-    if (movie) {
-        res.status(200).json(movie);
-    } else {
-        res.status(404).json({message: 'The movie you requested could not be found.', status_code: 404});
+// Register or Authenticate a user
+router.post('/', asyncHandler(async (req, res) => {
+  try {
+    if (!req.body.username || !req.body.password) {
+      return res.status(400).json({ success: false, msg: 'Username and password are required.' });
     }
+    if (req.query.action === 'register') {
+      await registerUser(req, res);
+    } else {
+      await authenticateUser(req, res);
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, msg: 'Internal server error.' });
+  }
 }));
 
-router.get('/tmdb/upcoming', asyncHandler(async (req, res) => {
-    const upcomingMovies = await getUpcomingMovies();
-    res.status(200).json(upcomingMovies);
+// Update a user
+router.put('/:id', async (req, res) => {
+  if (req.body._id) delete req.body._id;
+  const result = await User.updateOne({
+    _id: req.params.id,
+  }, req.body);
+  if (result.matchedCount) {
+    res.status(200).json({ code: 200, msg: 'User Updated Successfully' });
+  } else {
+    res.status(404).json({ code: 404, msg: 'Unable to Update User' });
+  }
+});
+
+// Update user profile
+router.get('/profile', asyncHandler(async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+      return res.status(401).json({ success: false, message: 'Authorization header missing' });
+    }
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.SECRET);
+    
+    const user = await User.findById(decoded._id); 
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.status(200).json(user);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
 }));
 
-router.get('/genres', asyncHandler(async (req, res) => {
-    const genres = await getGenres();
-    res.status(200).json(genres);
-}));
+
+// Helper functions for register and authenticate
+async function registerUser(req, res) {
+  await User.create(req.body);
+  res.status(201).json({ success: true, msg: 'User successfully created.' });
+}
+
+async function authenticateUser(req, res) {
+  const user = await User.findByUserName(req.body.username);
+  if (!user) {
+    return res.status(401).json({ success: false, msg: 'Authentication failed. User not found.' });
+  }
+
+  const isMatch = await user.comparePassword(req.body.password);
+  if (isMatch) {
+    const token = jwt.sign({ username: user.username }, process.env.SECRET);
+    res.status(200).json({ success: true, token: 'BEARER ' + token });
+  } else {
+    res.status(401).json({ success: false, msg: 'Wrong password.' });
+  }
+}
+
+// Add a movie to favorites
+router.post('/favorites', authenticate, async (req, res) => {
+  try {
+      const userId = req.user._id;
+      const { movieId } = req.body;
+
+      const user = await User.findById(userId);
+      if (!user) {
+          return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Add movieId to favoriteMovies array if it doesn't already exist
+      if (!user.favoriteMovies.includes(movieId)) {
+          user.favoriteMovies.push(movieId);
+          await user.save();
+      }
+
+      res.status(200).json({ message: 'Movie added to favorites' });
+  } catch (error) {
+      res.status(500).json({ message: 'Server error', error });
+  }
+});
+
+
+// Remove a movie from favorites
+router.delete('/favorites', authenticate, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { movieId } = req.body;
+
+    // Find the user by ID
+    const user = await User.findById(userId);
+
+    // Remove movie from favorites
+    user.favoriteMovies = user.favoriteMovies.filter(id => id !== movieId);
+    await user.save();
+
+    res.status(200).json({ message: 'Movie removed from favorites', favorites: user.favoriteMovies });
+  } catch (error) {
+    res.status(500).json({ message: 'Error removing movie from favorites', error });
+  }
+});
+
+// Get all favorite movies for the logged-in user
+router.get('/favorites', authenticate, async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // Find the user by ID and populate favorite movies
+    const user = await User.findById(userId);
+
+    res.status(200).json({ favorites: user.favoriteMovies });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching favorite movies', error });
+  }
+});
 
 
 export default router;

@@ -6,6 +6,9 @@ import authenticate from './authenticate';
 import './db';
 import defaultErrHandler from './errHandler';
 import moviesRouter from './api/movies';
+import userModel from './api/users/userModel';
+
+
 
 dotenv.config();
 
