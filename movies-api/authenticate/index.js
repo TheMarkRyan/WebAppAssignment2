@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import User from '../api/users/userModel.js';  // Ensure the path is correct
+import User from '../api/users/userModel.js';  // Ensure the path and file extension are correct
 
 const authenticate = async (req, res, next) => {
     try { 
@@ -10,9 +10,7 @@ const authenticate = async (req, res, next) => {
             return res.status(401).json({ message: 'No authorization header' });
         }
 
-        // Token might not always have the 'Bearer ' prefix, ensure flexibility
-        const token = authHeader.split(" ")[1] || authHeader;
-
+        const token = authHeader.split(" ")[1];
         console.log('Token after split:', token);  // Log the token after splitting
 
         if (!token) {
