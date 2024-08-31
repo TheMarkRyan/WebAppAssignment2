@@ -64,5 +64,26 @@ router.get('/favorites', authenticate, asyncHandler(async (req, res) => {
     res.status(500).json({ success: false, message: 'Error fetching favorite movies', error });
   }
 }));
+export const getWatchlist = async (authToken) => {
+  const token = authToken.split(' ')[1]; // Get the token without the 'BEARER' prefix
+  const url = `http://localhost:8080/api/users/watchlist`;
+  const options = {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`, // Correct the Authorization header
+    },
+  };
+
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new Error("Failed to fetch watchlist.");
+  }
+
+  const data = await response.json();
+  return data.watchlist; 
+};
+
+
 
 export default router;
