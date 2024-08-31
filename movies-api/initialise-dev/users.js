@@ -1,28 +1,68 @@
 import express from 'express';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcrypt';
-import User from './userModel';
+import asyncHandler from 'express-async-handler';
+import User from '../users/userModel.js';
+import authenticate from '../../authenticate';
 
 const router = express.Router();
 
-// Register a new user
-router.post('/register', async (req, res) => {
-  const { username, password } = req.body;
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const user = new User({ username, password: hashedPassword });
-  await user.save();
-  res.status(201).json({ message: 'User created successfully' });
-});
+// Add a movie to favorites
+router.post('/favorites', authenticate, asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { movieId } = req.body;
 
-// Login a user
-router.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  const user = await User.findOne({ username });
-  if (!user || !(await bcrypt.compare(password, user.password))) {
-    return res.status(401).json({ message: 'Invalid credentials' });
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Add movieId to favoriteMovies array if it doesn't already exist
+    if (!user.favoriteMovies.includes(movieId)) {
+      user.favoriteMovies.push(movieId);
+      await user.save();
+    }
+
+    res.status(200).json({ success: true, message: 'Movie added to favorites', favoriteMovies: user.favoriteMovies });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Server error', error });
   }
-  const token = jwt.sign({ userId: user._id }, process.env.SECRET_KEY, { expiresIn: '1h' });
-  res.status(200).json({ token });
-});
+}));
+
+// Remove a movie from favorites
+router.delete('/favorites', authenticate, asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+  const { movieId } = req.body;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Remove movieId from favoriteMovies array
+    user.favoriteMovies = user.favoriteMovies.filter(id => id !== movieId);
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Movie removed from favorites', favoriteMovies: user.favoriteMovies });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error removing movie from favorites', error });
+  }
+}));
+
+// Get all favorite movies for the logged-in user
+router.get('/favorites', authenticate, asyncHandler(async (req, res) => {
+  const userId = req.user._id;
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    res.status(200).json({ success: true, favoriteMovies: user.favoriteMovies });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching favorite movies', error });
+  }
+}));
 
 export default router;

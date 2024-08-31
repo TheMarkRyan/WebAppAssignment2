@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import multer from 'multer';
 import User from '../users/userModel.js';
+import authenticate from '../../authenticate';
 
 const router = express.Router();
 
@@ -28,7 +29,6 @@ router.get('/', asyncHandler(async (req, res) => {
 // Register or Authenticate a user
 router.post('/', asyncHandler(async (req, res) => {
   try {
-    console.log("Action:", req.query.action); // Debugging line
     if (!req.body.username || !req.body.password) {
       return res.status(400).json({ success: false, msg: 'Username and password are required.' });
     }
@@ -46,9 +46,7 @@ router.post('/', asyncHandler(async (req, res) => {
 // Update a user
 router.put('/:id', async (req, res) => {
   if (req.body._id) delete req.body._id;
-  const result = await User.updateOne({
-    _id: req.params.id,
-  }, req.body);
+  const result = await User.updateOne({ _id: req.params.id }, req.body);
   if (result.matchedCount) {
     res.status(200).json({ code: 200, msg: 'User Updated Successfully' });
   } else {
@@ -75,6 +73,54 @@ router.put('/profile', upload.single('profilePic'), async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: 'Internal Server Error.' });
+  }
+});
+
+// Add a movie to the watchlist
+router.post('/watchlist', authenticate, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { movieId, title } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Add movie to watchlist if it doesn't already exist
+    const existingMovie = user.watchlist.find(movie => movie.id === movieId);
+    if (!existingMovie) {
+      user.watchlist.push({ id: movieId, title });
+      await user.save();
+    }
+
+    res.status(200).json({ message: 'Movie added to watchlist', watchlist: user.watchlist });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error });
+  }
+});
+
+
+
+// Remove a movie from the watchlist
+router.delete('/watchlist', authenticate, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { movieId } = req.body;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Remove movie from watchlist
+    user.watchlist = user.watchlist.filter(movie => movie.id !== movieId);
+    await user.save();
+
+    res.status(200).json({ message: 'Movie removed from watchlist', watchlist: user.watchlist });
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
 

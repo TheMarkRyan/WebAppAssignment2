@@ -126,6 +126,7 @@ router.post('/favorites', authenticate, async (req, res) => {
 });
 
 
+
 // Remove a movie from favorites
 router.delete('/favorites', authenticate, async (req, res) => {
   try {

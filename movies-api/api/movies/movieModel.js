@@ -1,40 +1,46 @@
 import mongoose from 'mongoose';
+import bcrypt from 'bcrypt';
 
 const Schema = mongoose.Schema;
 
-
-const MovieSchema = new Schema({
-  adult: { type: Boolean },
-  id: { type: Number, required: true, unique: true },
-  poster_path: { type: String },
-  overview: { type: String },
-  release_date: { type: String },
-  original_title: { type: String },
-  genre_ids: [{ type: Number }],
-  original_language: { type: String },
-  title: { type: String },
-  backdrop_path: { type: String },
-  popularity: { type: Number },
-  vote_count: { type: Number },
-  video: { type: Boolean },
-  vote_average: { type: Number },
-  production_countries: [{
-    iso_3166_1: { type: String },
-    name: { type: String }
-  }],
-  runtime: { type: Number },
-  spoken_languages: [{
-    iso_639_1: { type: String },
-    name: { type: String }
-  }],
-  status: { type: String },
-  tagline: { type: String }
+const UserSchema = new mongoose.Schema({
+  username: { type: String, unique: true, required: true },
+  password: {
+    type: String,
+    required: true,
+    validate: {
+      validator: function(v) {
+        return /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/.test(v);
+      },
+      message: props => `${props.value} is not a valid password! It must contain at least 8 characters, including one letter, one number, and one special character.`,
+    },
+  },
+  bio: { type: String, default: '' },
+  profilePic: { type: String, default: '' },
+  favoriteMovies: [{ type: String }] // Array to store favorite movie IDs or titles
 });
 
-MovieSchema.statics.findByMovieDBId = function (id) {
-  return this.findOne({ id: id });
+UserSchema.methods.comparePassword = async function (passw) { 
+  return await bcrypt.compare(passw, this.password); 
 };
 
-export default mongoose.model('Movies', MovieSchema);
+UserSchema.statics.findByUserName = function (username) {
+  return this.findOne({ username: username });
+};
 
+UserSchema.pre('save', async function(next) {
+  const saltRounds = 10;
+  if (this.isModified('password') || this.isNew) {
+    try {
+      const hash = await bcrypt.hash(this.password, saltRounds);
+      this.password = hash;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  } else {
+    next();
+  }
+});
 
+export default mongoose.model('User', UserSchema);

@@ -317,3 +317,4 @@ export const updateProfile = async (formData) => {
 
   return await response.json();
 };
+

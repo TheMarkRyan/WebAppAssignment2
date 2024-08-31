@@ -17,6 +17,14 @@ const UserSchema = new mongoose.Schema({
   },
   bio: { type: String, default: '' },
   profilePic: { type: String, default: '' },
+  favoriteMovies: [{ type: String }], // Array to store favorite movie IDs or titles
+  watchlist: [
+    {
+      id: { type: String },
+      title: { type: String },
+      addedAt: { type: Date, default: Date.now }
+    }
+  ],
 });
 
 UserSchema.methods.comparePassword = async function (passw) { 
