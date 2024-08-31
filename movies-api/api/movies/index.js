@@ -67,32 +67,5 @@ router.get('/favorites', authenticate, async (req, res) => {
   }
 });
 
-// Add a movie to the watchlist
-router.post('/watchlist', authenticate, async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { movieId, title } = req.body;
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Check if the movie is already in the watchlist
-    const movieIndex = user.watchlist.findIndex(movie => movie.id === movieId);
-
-    if (movieIndex > -1) {
-      return res.status(400).json({ success: false, message: 'This movie is already in your watchlist.' });
-    } else {
-      // Movie is not in the watchlist, so add it
-      user.watchlist.push({ id: movieId, title });
-      await user.save();
-      return res.status(200).json({ success: true, message: 'Movie added to watchlist', watchlist: user.watchlist });
-    }
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
 
 export default router;

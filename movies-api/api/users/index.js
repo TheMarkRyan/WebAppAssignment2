@@ -117,26 +117,33 @@ async function authenticateUser(req, res) {
     res.status(401).json({ success: false, msg: 'Wrong password.' });
   }
 }
-// Add a movie to the watchlist
 router.post('/watchlist', authenticate, async (req, res) => {
   try {
     const userId = req.user._id;
     const { movieId, title } = req.body;
 
+    console.log('User ID:', userId);
+    console.log('Movie ID:', movieId);
+    console.log('Movie Title:', title);
+
     const user = await User.findById(userId);
     if (!user) {
+      console.log('User not found');
       return res.status(404).json({ message: 'User not found' });
     }
 
     // Check if the movie is already in the watchlist
     const movieIndex = user.watchlist.findIndex(movie => movie.id === movieId);
+    console.log('Movie Index in Watchlist:', movieIndex);
 
     if (movieIndex > -1) {
+      console.log('Movie already in watchlist');
       return res.status(400).json({ success: false, message: 'This movie is already in your watchlist.' });
     } else {
       // Movie is not in the watchlist, so add it
       user.watchlist.push({ id: movieId, title });
       await user.save();
+      console.log('Movie added to watchlist:', user.watchlist);
       return res.status(200).json({ success: true, message: 'Movie added to watchlist', watchlist: user.watchlist });
     }
   } catch (error) {
@@ -144,6 +151,7 @@ router.post('/watchlist', authenticate, async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 
 
 export default router;
