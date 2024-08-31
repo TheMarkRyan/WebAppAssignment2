@@ -76,29 +76,39 @@ router.put('/profile', upload.single('profilePic'), async (req, res) => {
   }
 });
 
+
 // Add a movie to the watchlist
 router.post('/watchlist', authenticate, async (req, res) => {
   try {
+    // Verify user is authenticated and token is valid
+    console.log("User ID from token:", req.user._id);
+    
     const userId = req.user._id;
     const { movieId, title } = req.body;
 
+    // Find the user by ID
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Add movie to watchlist if it doesn't already exist
-    const existingMovie = user.watchlist.find(movie => movie.id === movieId);
-    if (!existingMovie) {
+    console.log("User found:", user.username);
+
+    // Check if the movie is already in the watchlist
+    if (!user.watchlist.some(movie => movie.id === movieId)) {
+      // Add movie to watchlist
       user.watchlist.push({ id: movieId, title });
       await user.save();
+      console.log("Movie added to watchlist:", { id: movieId, title });
     }
 
-    res.status(200).json({ message: 'Movie added to watchlist', watchlist: user.watchlist });
+    res.status(200).json({ success: true, message: 'Movie added to watchlist', watchlist: user.watchlist });
   } catch (error) {
-    res.status(500).json({ message: 'Server error', error });
+    console.error('Server error:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 });
+
 
 
 
@@ -138,7 +148,11 @@ async function authenticateUser(req, res) {
 
   const isMatch = await user.comparePassword(req.body.password);
   if (isMatch) {
-    const token = jwt.sign({ username: user.username }, process.env.SECRET);
+    const token = jwt.sign(
+      { username: user.username, _id: user._id }, // Include _id in the token payload
+      process.env.SECRET,
+      { expiresIn: '1h' } // Optional: Token expiry time
+    );
     res.status(200).json({ success: true, token: 'BEARER ' + token });
   } else {
     res.status(401).json({ success: false, msg: 'Wrong password.' });
